@@ -1,0 +1,115 @@
+version: "3.9"
+
+services:
+  # ============================
+  # API GATEWAY (NGINX)
+  # ============================
+  api-gateway:
+    image: nginx:alpine
+    container_name: api-gateway
+    ports:
+      - "8081:80" #opsional task
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - acad-service
+    networks:
+      - internal-net
+    restart: unless-stopped
+
+# ============================
+  # AUTH SERVICE (NODE.JS)
+  # ============================
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      MONGO_URI: mongodb://auth-db:27017/auth
+      JWT_SECRET: "8f4c9e6b2a1d5f3e7c9a0b4d6e8f1a3c5e7b9d0f2a4c6e8b0d2f4a6c8e0b2d4f6"
+    depends_on:
+      - auth-db
+    networks:
+      - internal-net
+    volumes:
+      - ./auth-service:/app    
+      - /app/node_modules         
+    # ----------------------------
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================
+  # AUTH DATABASE (MONGODB)
+  # ============================
+  auth-db:
+    image: mongo:6.0
+    container_name: auth-db
+    restart: always
+    ports:
+      - "27017:27017"   # Port dibuka untuk debugging
+    volumes:
+      - auth-data:/data/db
+    networks:
+      - internal-net
+
+  # ============================
+  # ACAD DATABASE (POSTGRES)
+  # ============================
+  acad-db:
+    image: postgres:15-alpine
+    container_name: acad-db
+    restart: always
+    environment:
+      POSTGRES_DB: db_kelas
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5432:5432"     # Port dibuka untuk debugging
+    volumes:
+      - acad-data:/var/lib/postgresql/data
+      - ./acad-service/db_kelas.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - internal-net
+
+  # ============================
+  # ACADEMIC SERVICE (FASTAPI)
+  # ============================
+  acad-service:
+    build: ./acad-service
+    container_name: acad-service
+    ports:
+      - "3002:3002"
+    environment:
+      DB_HOST: acad-db
+      DB_PORT: 5432
+      DB_NAME: db_kelas
+      DB_USER: root
+      DB_PASSWORD: root
+    depends_on:
+      - acad-db
+    networks:
+      - internal-net
+    restart: unless-stopped
+
+# ============================
+# NETWORK & VOLUMES
+# ============================
+networks:
+  internal-net:
+    driver: bridge
+    name: profhamam-network
+    ipam:
+      config:
+        - subnet: 172.16.0.0/28
+
+volumes:
+  auth-data:
+  acad-data:
