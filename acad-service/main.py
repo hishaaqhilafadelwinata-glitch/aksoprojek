@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, BigInteger, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
@@ -38,7 +38,7 @@ class Mahasiswa(Base):
     jurusan = Column(String(50))
     angkatan = Column(Integer)
     
-    krs_list = relationship("KRS", back_populates="mahasiswa")
+    krs_list = relationship("KRS", back_populates="mahasiswa", lazy="select")
 
 class MataKuliah(Base):
     __tablename__ = "mata_kuliah"
@@ -47,20 +47,20 @@ class MataKuliah(Base):
     nama_mk = Column(String(100), nullable=False)
     sks = Column(Integer, nullable=False)
     
-    krs_list = relationship("KRS", back_populates="mata_kuliah")
+    krs_list = relationship("KRS", back_populates="mata_kuliah", lazy="select")
 
 class KRS(Base):
     __tablename__ = "krs"
     
     id_krs = Column(BigInteger, primary_key=True, autoincrement=True)
-    nim = Column(String(10), ForeignKey("mahasiswa.nim"), nullable=False)
-    kode_mk = Column(String(10), ForeignKey("mata_kuliah.kode_mk"), nullable=False)
+    nim = Column(String(10), ForeignKey("mahasiswa.nim", ondelete="CASCADE"), nullable=False, index=True)
+    kode_mk = Column(String(10), ForeignKey("mata_kuliah.kode_mk", ondelete="RESTRICT"), nullable=False, index=True)
     nilai = Column(String(2), ForeignKey("bobot_nilai.nilai"))
     semester = Column(Integer)
     
-    mahasiswa = relationship("Mahasiswa", back_populates="krs_list")
-    mata_kuliah = relationship("MataKuliah", back_populates="krs_list")
-    bobot_rel = relationship("BobotNilai")
+    mahasiswa = relationship("Mahasiswa", back_populates="krs_list", lazy="select")
+    mata_kuliah = relationship("MataKuliah", back_populates="krs_list", lazy="select")
+    bobot_rel = relationship("BobotNilai", viewonly=True)
 
 class BobotNilai(Base):
     __tablename__ = "bobot_nilai"
@@ -384,4 +384,5 @@ async def database_status(db: Session = Depends(get_db)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=3002)
+    PORT = int(os.getenv("PORT", "3002"))
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
